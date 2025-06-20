@@ -1,0 +1,6 @@
+{
+    "liveshare.notebooks.allowGuestExecuteCells": true,
+    "liveshare.autoShareTerminals": true,
+    "liveshare.allowGuestTaskControl": true,
+    "liveshare.allowGuestDebugControl": true
+}
