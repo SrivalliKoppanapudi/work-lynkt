@@ -1,5 +1,5 @@
 import React,{useState,useEffect} from "react";
-import { View, Text, StyleSheet, TouchableOpacity,Pressable,ScrollView,RefreshControl,FlatList } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity,Pressable,ScrollView,RefreshControl,FlatList,Modal,Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -11,7 +11,7 @@ import PostCard from "../../component/socialmedia/PostCard";
 import { supabase } from "../../lib/Superbase";
 
 
-
+import ViewPostModal from "../../component/socialmedia/ViewPostModal";
 import TrendingTopicCard from "../../component/socialmedia/TrendingTopicCard";
 
 export default function SocialMediaDashboard ()  {
@@ -20,11 +20,46 @@ export default function SocialMediaDashboard ()  {
     const [error, setError] = useState<string | null>(null);
     const [posts,setPosts]=useState<any[]>([]);
     const [loading, setLoading] = useState(true)
+    const [selectedPost, setSelectedPost] = useState<PostCardProps | null>(null);
+const [modalVisible, setModalVisible] = useState(false);
+interface PostModalProps {
+  post: PostCardProps;
+  visible: boolean;
+  onClose: () => void;
+}
+interface PostCardProps {
+  postId: string;
+  userId: string;
+  user: {
+    name: string;
+    role: string;
+    avatar: string;
+    time: string;
+  };
+  content: string;
+  images: string[];
+  stats: {
+    likes: number;
+    comments: number;
+    shares: number;
+    saves: number;
+  };
+}
       const handleRefresh = async () => {
     setRefreshing(true);
     // await loadAllData();
+    const { data, error } = await supabase
+    .from('posts')
+    .select('*') // or your specific fields
+    .order('created_at', { ascending: false });
+
+  if (!error) setPosts(data);
+    
     setRefreshing(false);
   };
+
+ 
+
 
   const postData = [
   {
@@ -112,8 +147,15 @@ export default function SocialMediaDashboard ()  {
   },
 ];
 
+useEffect(() => {
+  if (!modalVisible && selectedPost !== null) {
+    fetchPosts(); // Refresh posts
+    setSelectedPost(null); // Clear selected post to prevent stale data
+  }
+}, [modalVisible]);
 
-  useEffect(() => {
+
+ 
     const fetchPosts = async () => {
       setLoading(true)
 
@@ -151,8 +193,10 @@ export default function SocialMediaDashboard ()  {
       setLoading(false)
     }
 
-    fetchPosts()
-  }, [])
+  useEffect(() => {
+  fetchPosts();
+}, []);
+
 
   // Helper to convert ISO time to "time ago"
   const timeSince = (createdAt: string): string => {
@@ -245,7 +289,11 @@ export default function SocialMediaDashboard ()  {
                             {/* user posts */}
                             {loading?(<Text style={styles.heading}>Loading posts...</Text>):(
                               posts.map((item) => (
-                              <PostCard
+                              <TouchableOpacity key={item.postId}  onPress={() => {
+    setSelectedPost(item); // send entire post object
+    setModalVisible(true);
+  }}>
+                                <PostCard
                               postId={item.postId}
           
           userId={item.userId}
@@ -253,9 +301,17 @@ export default function SocialMediaDashboard ()  {
           content={item.content}
           images={item.images}
           stats={item.stats}
-        />))
+        />
+                              </TouchableOpacity>))
 
                             )}
+                            {selectedPost && (
+  <ViewPostModal
+    modalVisible={modalVisible}
+    setModalVisible={setModalVisible}
+    selectedPost={selectedPost}
+  />
+)}
                             
                             
                   </>

@@ -51,6 +51,38 @@ const [likeCount, setLikeCount] = useState(stats.likes);
 const [saveCount, setSaveCount] = useState(stats.saves);
 const [modalVisible, setModalVisible] = useState(false);
 
+
+const checkLikeSaveStatus = async () => {
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+  const userId = userData?.user?.id;
+  if (!userId || authError) return;
+
+  try {
+    // Run both queries in parallel
+    const [likeRes, saveRes] = await Promise.all([
+      supabase
+        .from("post_likes")
+        .select("id")
+        .eq("post_id", postId)
+        .eq("user_id", userId)
+        .single(),
+
+      supabase
+        .from("post_saves")
+        .select("id")
+        .eq("post_id", postId)
+        .eq("user_id", userId)
+        .single(),
+    ]);
+
+    setLiked(!!likeRes.data);
+    setSaved(!!saveRes.data);
+  } catch (error) {
+    console.error("Error checking like/save status:", error);
+  }
+};
+
+
 const checkLikeStatus = async () => {
   const { data } = await supabase
     .from("post_likes")
@@ -72,37 +104,20 @@ const checkSaveStatus = async () => {
 };
 
 useEffect(() => {
-  checkLikeStatus();
-  checkSaveStatus();
+  /* checkLikeStatus();
+  checkSaveStatus(); */
+  checkLikeSaveStatus();
 }, []);
 
-/* useEffect(()=>{
-  // Count total likes
-const countLikes = async()=>{
-    const { count: totalLikes } = await supabase
-    .from("post_likes")
-    .select("*", { count: "exact", head: true })
-    .eq("post_id", postId);
 
-  setLikeCount(totalLikes || 0);
-  countLikes();
-}
-},[liked])
-
-useEffect(()=>{
-  // Count total likes
-const countSaves = async()=>{
-    const { count: totalSaves } = await supabase
-    .from("post_saves")
-    .select("*", { count: "exact", head: true })
-    .eq("post_id", postId);
-
-  setSaveCount(totalSaves || 0);
-  countSaves();
-}
-},[saved]) */
 
 const toggleSave = async () => {
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData?.user?.id;
+  if (!userId) return;
+
+  let newCount = saveCount;
+
   if (saved) {
     await supabase
       .from("post_saves")
@@ -110,30 +125,33 @@ const toggleSave = async () => {
       .eq("post_id", postId)
       .eq("user_id", userId);
 
-    setSaveCount((prev) => prev - 1);
-
-    await supabase
-      .from("posts")
-      .update({ saves: saveCount - 1 })
-      .eq("id", postId);
+    newCount = saveCount - 1;
   } else {
     await supabase
       .from("post_saves")
       .insert([{ post_id: postId, user_id: userId }]);
 
-    setSaveCount((prev) => prev + 1);
-
-    await supabase
-      .from("posts")
-      .update({ saves: saveCount + 1 })
-      .eq("id", postId);
+    newCount = saveCount + 1;
   }
+  if(newCount < 0) {newCount = 0;}
 
+  // Update post stats
+  await supabase
+    .from("posts")
+    .update({ saves: newCount })
+    .eq("id", postId);
+
+  setSaveCount(newCount);
   setSaved(!saved);
 };
 
-
 const toggleLike = async () => {
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData?.user?.id;
+  if (!userId) return;
+
+  let newCount = likeCount;
+
   if (liked) {
     await supabase
       .from("post_likes")
@@ -141,27 +159,31 @@ const toggleLike = async () => {
       .eq("post_id", postId)
       .eq("user_id", userId);
 
-    setLikeCount((prev) => prev - 1);
-
-    await supabase
-      .from("posts")
-      .update({ likes: likeCount - 1 })
-      .eq("id", postId);
+    newCount = likeCount - 1;
   } else {
     await supabase
       .from("post_likes")
       .insert([{ post_id: postId, user_id: userId }]);
 
-    setLikeCount((prev) => prev + 1);
-
-    await supabase
-      .from("posts")
-      .update({ likes: likeCount + 1 })
-      .eq("id", postId);
+    newCount = likeCount + 1;
   }
+  if(newCount < 0) {newCount = 0;}
 
+ const { error } = await supabase
+    .from("posts")
+    .update({ likes: newCount })
+    .eq("id", postId); // make sure this matches your schema
+
+  if (error) {
+    console.error("Failed to update like count:", error.message);
+    return;
+  }
+ 
+
+  setLikeCount(newCount);
   setLiked(!liked);
 };
+
 
 /* share */
 const postUrl = 'https://example.com/post/preview';
@@ -172,32 +194,7 @@ const shareOptions = {
      url: postUrl,
   };
 
-/*   const shareToWhatsApp = async () => {
-    try {
-      await Share.shareSingle({ ...shareOptions, social: Share.Social.WHATSAPP });
-      setModalVisible(false);
-    } catch (err) {
-      console.log(err);
-    }
-  };
 
-  const shareToFacebook = async () => {
-    try {
-      await Share.shareSingle({ ...shareOptions, social: Share.Social.FACEBOOK });
-      setModalVisible(false);
-    } catch (err) {
-      console.log(err);
-    }
-  }; */
-
- /*  const shareGeneral = async () => {
-    try {
-      await Share.open(shareOptions);
-      setModalVisible(false);
-    } catch (err) {
-      console.log(err);
-    }
-  }; */
 
 
   return (
